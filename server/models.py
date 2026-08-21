@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import validates
 from sqlalchemy import CheckConstraint
+from marshmallow import Schema, fields, validate
 
 db = SQLAlchemy()
 
@@ -89,3 +90,37 @@ class WorkoutExercise(db.Model):
 
     def __repr__(self):
         return f'<WorkoutExercise {self.id}, workout={self.workout_id}, exercise={self.exercise_id}, {self.sets}x{self.reps}>'
+
+
+# --- Marshmallow schemas ---
+# Nested fields use a lambda so schemas can reference each other regardless of
+# definition order. Each nested reference excludes whichever field would
+# otherwise cause infinite recursion.
+
+class ExerciseSchema(Schema):
+    id = fields.Integer()
+    name = fields.String(validate=validate.Length(min=1))
+    category = fields.String()
+    equipment_needed = fields.Boolean()
+    workout_exercises = fields.Nested(
+        lambda: WorkoutExerciseSchema(exclude=('exercise',)), many=True
+    )
+
+
+class WorkoutSchema(Schema):
+    id = fields.Integer()
+    date = fields.Date()
+    duration_minutes = fields.Integer(validate=validate.Range(min=1))
+    notes = fields.String()
+    workout_exercises = fields.Nested(
+        lambda: WorkoutExerciseSchema(exclude=('workout',)), many=True
+    )
+
+
+class WorkoutExerciseSchema(Schema):
+    id = fields.Integer()
+    reps = fields.Integer(validate=validate.Range(min=1))
+    sets = fields.Integer(validate=validate.Range(min=1))
+    duration_seconds = fields.Integer()
+    workout = fields.Nested(lambda: WorkoutSchema(exclude=('workout_exercises',)))
+    exercise = fields.Nested(lambda: ExerciseSchema(exclude=('workout_exercises',)))
